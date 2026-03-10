@@ -1,4 +1,4 @@
-# iot2026 ESP32 HW1
+# IOT2026 ESP32 HW1
 > 114-2 智慧物聯網 Arduino 系列課程 HW1
 
 # 硬體配置
