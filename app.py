@@ -35,6 +35,12 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -----------------
+# State Management
+# -----------------
+if "mock_seed" not in st.session_state:
+    st.session_state.mock_seed = int(datetime.now().timestamp())
+
+# -----------------
 # Sidebar Controls
 # -----------------
 st.sidebar.title("⚙️ Dashboard Settings")
@@ -50,10 +56,16 @@ data_source = st.sidebar.radio(
 st.sidebar.divider()
 records_limit = st.sidebar.slider("Number of Records to Display", min_value=10, max_value=500, value=100, step=10)
 
+if data_source == "Live Database (Local)":
+    if st.sidebar.button("🔄 Refresh Data"):
+        pass # Button click automatically triggers a script rerun
+else:
+    if st.sidebar.button("🎲 Generate New Random Data"):
+        st.session_state.mock_seed += 1 # Update seed to force fresh mock data
+
 # -----------------
 # Data Loading Logic
 # -----------------
-@st.cache_data(ttl=2) # Cache data for 2 seconds to simulate realtime
 def load_db_data(limit):
     DB_PATH = os.path.join(os.path.dirname(__file__), "backend", "sensor_data.db")
     if not os.path.exists(DB_PATH):
@@ -72,14 +84,14 @@ def load_db_data(limit):
     except Exception:
         return pd.DataFrame()
 
-@st.cache_data(ttl=2)
-def generate_mock_data(limit):
-    # Use deterministic random seed based on current time bucket (evicts every 2 sec)
-    np.random.seed(int(datetime.now().timestamp() / 2))
+@st.cache_data
+def generate_mock_data(limit, seed):
+    # Use deterministic random seed parameter from session state
+    np.random.seed(seed)
     
-    # Generate timestamps (last `limit` seconds)
+    # Generate timestamps (last `limit` minutes)
     end_time = datetime.now()
-    start_time = end_time - timedelta(seconds=limit*5)
+    start_time = end_time - timedelta(minutes=limit)
     timestamps = pd.date_range(start=start_time, end=end_time, periods=limit)
     
     # Generate smooth random walk data for temp and humidity
@@ -101,13 +113,13 @@ def generate_mock_data(limit):
 if data_source == "Live Database (Local)":
     df = load_db_data(records_limit)
 else:
-    df = generate_mock_data(records_limit)
+    df = generate_mock_data(records_limit, st.session_state.mock_seed)
 
 # -----------------
 # Main UI Rendering
 # -----------------
 st.title("🌡️ ESP32 Real-Time Environment Dashboard")
-st.markdown("Monitor your space precisely. **Data updates automatically.**")
+st.markdown("Monitor your space precisely. **Use buttons on the left to manually refresh.**")
 
 if df.empty:
     st.warning("⚠️ No data available in the SQLite Database. If you are previewing on the web, please switch to 'Random Mock Data (Demo)' in the sidebar.")
@@ -154,7 +166,7 @@ else:
     fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='#333333')
     fig.update_layout(hovermode="x unified", legend_title_text='Sensors')
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig)
     
     st.divider()
     
@@ -166,13 +178,13 @@ else:
         fig_temp = px.area(df, x="timestamp", y="temperature", title="Temperature Fluidity",
                          color_discrete_sequence=["#ff4b4b"], template="plotly_dark")
         fig_temp.update_xaxes(tickformat="%H:%M:%S", showgrid=True)
-        st.plotly_chart(fig_temp, use_container_width=True)
+        st.plotly_chart(fig_temp)
         
     with col_chart2:
         fig_hum = px.area(df, x="timestamp", y="humidity", title="Humidity Fluidity",
                         color_discrete_sequence=["#00d2ff"], template="plotly_dark")
         fig_hum.update_xaxes(tickformat="%H:%M:%S", showgrid=True)
-        st.plotly_chart(fig_hum, use_container_width=True)
+        st.plotly_chart(fig_hum)
 
     with st.expander("👀 View Raw Data Table"):
-        st.dataframe(df.sort_values('timestamp', ascending=False), use_container_width=True)
+        st.dataframe(df.sort_values('timestamp', ascending=False))
