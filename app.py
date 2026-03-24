@@ -1,67 +1,178 @@
 import streamlit as st
 import sqlite3
 import pandas as pd
+import numpy as np
 import os
+import plotly.express as px
+from datetime import datetime, timedelta
 
+# -----------------
+# Page Settings
+# -----------------
 st.set_page_config(page_title="ESP32 Sensor Dashboard", page_icon="🌡️", layout="wide")
 
-st.title("🌡️ ESP32 Sensor Data Dashboard")
-st.markdown("Real-time monitoring of temperature and humidity from the SQLite database.")
+# Custom CSS for better UI aesthetics
+st.markdown("""
+<style>
+    .metric-card {
+        background-color: #1E1E1E;
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 2px 2px 10px rgba(0,0,0,0.2);
+        text-align: center;
+    }
+    .stMetric {
+        background-color: #1a1a2e;
+        padding: 20px !important;
+        border-radius: 15px !important;
+        border-left: 5px solid #00d2ff !important;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3) !important;
+    }
+    .stMetric label {
+        color: #b0c4de !important;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-# Connect to database
-DB_PATH = os.path.join(os.path.dirname(__file__), "backend", "sensor_data.db")
+# -----------------
+# Sidebar Controls
+# -----------------
+st.sidebar.title("⚙️ Dashboard Settings")
+st.sidebar.markdown("Configure the data source and view settings below.")
 
-def load_data():
-    conn = sqlite3.connect(DB_PATH)
-    query = "SELECT timestamp, temperature, humidity FROM sensor_data ORDER BY timestamp DESC"
-    df = pd.read_sql_query(query, conn)
-    conn.close()
-    
-    if df.empty:
-        return df
+data_source = st.sidebar.radio(
+    "Data Source",
+    options=["Live Database (Local)", "Random Mock Data (Demo)"],
+    index=0,
+    help="Choose 'Live Database' when connected to the local SQLite DB, or 'Random Mock Data' for public web deployment demos."
+)
+
+st.sidebar.divider()
+records_limit = st.sidebar.slider("Number of Records to Display", min_value=10, max_value=500, value=100, step=10)
+
+# -----------------
+# Data Loading Logic
+# -----------------
+@st.cache_data(ttl=2) # Cache data for 2 seconds to simulate realtime
+def load_db_data(limit):
+    DB_PATH = os.path.join(os.path.dirname(__file__), "backend", "sensor_data.db")
+    if not os.path.exists(DB_PATH):
+        return pd.DataFrame()
         
-    # Convert timestamp to datetime if not already
-    df['timestamp'] = pd.to_datetime(df['timestamp'])
-    # Sort chronologically for charting
-    df = df.sort_values('timestamp')
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        query = f"SELECT timestamp, temperature, humidity FROM sensor_data ORDER BY timestamp DESC LIMIT {limit}"
+        df = pd.read_sql_query(query, conn)
+        conn.close()
+        
+        if not df.empty:
+            df['timestamp'] = pd.to_datetime(df['timestamp'])
+            df = df.sort_values('timestamp')
+        return df
+    except Exception:
+        return pd.DataFrame()
+
+@st.cache_data(ttl=2)
+def generate_mock_data(limit):
+    # Use deterministic random seed based on current time bucket (evicts every 2 sec)
+    np.random.seed(int(datetime.now().timestamp() / 2))
+    
+    # Generate timestamps (last `limit` seconds)
+    end_time = datetime.now()
+    start_time = end_time - timedelta(seconds=limit*5)
+    timestamps = pd.date_range(start=start_time, end=end_time, periods=limit)
+    
+    # Generate smooth random walk data for temp and humidity
+    temps = np.cumsum(np.random.normal(0, 0.2, limit)) + 26.0
+    hums = np.cumsum(np.random.normal(0, 0.5, limit)) + 55.0
+    
+    # Keep within realistic bounds
+    temps = np.clip(temps, 15.0, 40.0)
+    hums = np.clip(hums, 30.0, 90.0)
+    
+    df = pd.DataFrame({
+        'timestamp': timestamps,
+        'temperature': temps,
+        'humidity': hums
+    })
     return df
 
-try:
-    df = load_data()
+# Fetch Data based on choice
+if data_source == "Live Database (Local)":
+    df = load_db_data(records_limit)
+else:
+    df = generate_mock_data(records_limit)
+
+# -----------------
+# Main UI Rendering
+# -----------------
+st.title("🌡️ ESP32 Real-Time Environment Dashboard")
+st.markdown("Monitor your space precisely. **Data updates automatically.**")
+
+if df.empty:
+    st.warning("⚠️ No data available in the SQLite Database. If you are previewing on the web, please switch to 'Random Mock Data (Demo)' in the sidebar.")
+else:
+    # -----------------
+    # Top Metrics Board
+    # -----------------
+    latest = df.iloc[-1]
+    prev = df.iloc[-2] if len(df) > 1 else latest
     
-    if not df.empty:
-        # Create a layout with metrics at the top
-        col1, col2, col3 = st.columns(3)
-        latest = df.iloc[-1]
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("Temperature", f"{latest['temperature']:.1f} °C", 
+                  delta=f"{(latest['temperature'] - prev['temperature']):.1f} °C")
+    with col2:
+        st.metric("Humidity", f"{latest['humidity']:.1f} %", 
+                  delta=f"{(latest['humidity'] - prev['humidity']):.1f} %")
+    with col3:
+        st.metric("Total Records", f"{len(df)}", delta="Active")
+    with col4:
+        st.metric("Data Source", data_source.split(" ")[0], delta="Online", delta_color="normal")
         
-        col1.metric("Latest Temperature", f"{latest['temperature']:.1f} °C")
-        col2.metric("Latest Humidity", f"{latest['humidity']:.1f} %")
-        col3.metric("Total Readings", len(df))
+    st.divider()
+
+    # -----------------
+    # Interactive Plotly Charts
+    # -----------------
+    st.subheader("📈 Detailed Temporal Trends")
+    st.markdown("Hover over the lines for exact timestamps. Drag to zoom in on specific intervals.")
+    
+    # Main Combined Chart
+    fig = px.line(df, x="timestamp", y=["temperature", "humidity"], 
+                  title="Temperature & Humidity Co-relation",
+                  labels={"value": "Sensor Value", "timestamp": "Timestamp", "variable": "Metric"},
+                  template="plotly_dark", 
+                  color_discrete_sequence=["#ff4b4b", "#00d2ff"])
+    
+    fig.update_xaxes(
+        tickformat="%Y-%m-%d %H:%M:%S",
+        title_text="Exact Time",
+        showgrid=True, gridwidth=1, gridcolor='#333333'
+    )
+    fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='#333333')
+    fig.update_layout(hovermode="x unified", legend_title_text='Sensors')
+    
+    st.plotly_chart(fig, use_container_width=True)
+    
+    st.divider()
+    
+    # Side-by-Side Specific Views
+    st.subheader("📉 Micro View")
+    col_chart1, col_chart2 = st.columns(2)
+    
+    with col_chart1:
+        fig_temp = px.area(df, x="timestamp", y="temperature", title="Temperature Fluidity",
+                         color_discrete_sequence=["#ff4b4b"], template="plotly_dark")
+        fig_temp.update_xaxes(tickformat="%H:%M:%S", showgrid=True)
+        st.plotly_chart(fig_temp, use_container_width=True)
         
-        st.divider()
-        
-        # Charts
-        st.subheader("Data Trends")
-        
-        tab1, tab2, tab3 = st.tabs(["Combined Chart", "Temperature", "Humidity"])
-        
-        with tab1:
-            st.line_chart(df.set_index("timestamp")[["temperature", "humidity"]], use_container_width=True)
-            
-        with tab2:
-            st.line_chart(df.set_index("timestamp")["temperature"], color="#ff4b4b", use_container_width=True)
-            
-        with tab3:
-            st.line_chart(df.set_index("timestamp")["humidity"], color="#0068c9", use_container_width=True)
-            
-        st.divider()
-        
-        # Raw Data
-        st.subheader("Raw Data")
+    with col_chart2:
+        fig_hum = px.area(df, x="timestamp", y="humidity", title="Humidity Fluidity",
+                        color_discrete_sequence=["#00d2ff"], template="plotly_dark")
+        fig_hum.update_xaxes(tickformat="%H:%M:%S", showgrid=True)
+        st.plotly_chart(fig_hum, use_container_width=True)
+
+    with st.expander("👀 View Raw Data Table"):
         st.dataframe(df.sort_values('timestamp', ascending=False), use_container_width=True)
-        
-    else:
-        st.info("No sensor data found in the database. Please insert some data first.")
-        
-except Exception as e:
-    st.error(f"Error loading database from {DB_PATH}: {e}")
