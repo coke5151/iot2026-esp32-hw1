@@ -54,6 +54,9 @@ records_limit = st.sidebar.slider("Number of Records to Display", min_value=10, 
 if data_source == "Live Database (Local)":
     if st.sidebar.button("🔄 Refresh Data"):
         pass # Button click automatically triggers a script rerun
+        
+    # Automatically triggers a frontend rerun every 5000 milliseconds (5 seconds)
+    st_autorefresh(interval=5000, limit=None, key="live_data_updater")
 else:
     if st.sidebar.button("🎲 Clear & Regenerate Mock Data"):
         st.session_state.mock_df = None # Clears the rolling history
