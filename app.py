@@ -122,7 +122,11 @@ st.title("🌡️ ESP32 Real-Time Environment Dashboard")
 st.markdown("Monitor your space precisely. **Use buttons on the left to manually refresh.**")
 
 if df.empty:
-    st.warning("⚠️ No data available in the SQLite Database. If you are previewing on the web, please switch to 'Random Mock Data (Demo)' in the sidebar.")
+    if data_source == "Live Database (Local)":
+        st.error("🚨 **Error: Local Database Not Found or Empty!**")
+        st.info("We could not read any sensor data from `backend/sensor_data.db`. This usually means the ESP32 hasn't sent any data yet, or the backend server hasn't created the database. \n\n👉 **Tip: Switch Data Source to 'Random Mock Data (Demo)' in the left sidebar to preview the dashboard features!**")
+    else:
+        st.warning("⚠️ No data could be generated.")
 else:
     # -----------------
     # Top Metrics Board
