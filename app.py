@@ -5,6 +5,7 @@ import numpy as np
 import os
 import plotly.express as px
 from datetime import datetime, timedelta
+from streamlit_autorefresh import st_autorefresh
 
 # -----------------
 # Page Settings
@@ -35,12 +36,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -----------------
-# State Management
-# -----------------
-if "mock_seed" not in st.session_state:
-    st.session_state.mock_seed = int(datetime.now().timestamp())
-
-# -----------------
 # Sidebar Controls
 # -----------------
 st.sidebar.title("⚙️ Dashboard Settings")
@@ -60,8 +55,11 @@ if data_source == "Live Database (Local)":
     if st.sidebar.button("🔄 Refresh Data"):
         pass # Button click automatically triggers a script rerun
 else:
-    if st.sidebar.button("🎲 Generate New Random Data"):
-        st.session_state.mock_seed += 1 # Update seed to force fresh mock data
+    if st.sidebar.button("🎲 Clear & Regenerate Mock Data"):
+        st.session_state.mock_df = None # Clears the rolling history
+        
+    # Automatically triggers a frontend rerun every 1000 milliseconds (1 second)
+    st_autorefresh(interval=1000, limit=None, key="mock_data_updater")
 
 # -----------------
 # Data Loading Logic
@@ -84,36 +82,50 @@ def load_db_data(limit):
     except Exception:
         return pd.DataFrame()
 
-@st.cache_data
-def generate_mock_data(limit, seed):
-    # Use deterministic random seed parameter from session state
-    np.random.seed(seed)
+def update_mock_data(limit):
+    # If the user just switched or clicked Clear, initialize a base dataset
+    if "mock_df" not in st.session_state or st.session_state.mock_df is None:
+        np.random.seed(int(datetime.now().timestamp()))
+        end_time = datetime.now()
+        start_time = end_time - timedelta(seconds=limit)
+        timestamps = pd.date_range(start=start_time, end=end_time, periods=limit)
+        temps = np.cumsum(np.random.normal(0, 0.2, limit)) + 26.0
+        hums = np.cumsum(np.random.normal(0, 0.5, limit)) + 55.0
+        
+        temps = np.clip(temps, 15.0, 40.0)
+        hums = np.clip(hums, 30.0, 90.0)
+        
+        df = pd.DataFrame({'timestamp': timestamps, 'temperature': temps, 'humidity': hums})
+        st.session_state.mock_df = df
+        return df
+
+    # We already have data, let's append exactly 1 new random point for the sliding window effect
+    df = st.session_state.mock_df
+    now = datetime.now()
     
-    # Generate timestamps (last `limit` minutes)
-    end_time = datetime.now()
-    start_time = end_time - timedelta(minutes=limit)
-    timestamps = pd.date_range(start=start_time, end=end_time, periods=limit)
+    last_temp = df['temperature'].iloc[-1]
+    last_hum = df['humidity'].iloc[-1]
     
-    # Generate smooth random walk data for temp and humidity
-    temps = np.cumsum(np.random.normal(0, 0.2, limit)) + 26.0
-    hums = np.cumsum(np.random.normal(0, 0.5, limit)) + 55.0
+    new_temp = np.clip(last_temp + np.random.normal(0, 0.2), 15.0, 40.0)
+    new_hum = np.clip(last_hum + np.random.normal(0, 0.5), 30.0, 90.0)
     
-    # Keep within realistic bounds
-    temps = np.clip(temps, 15.0, 40.0)
-    hums = np.clip(hums, 30.0, 90.0)
+    new_row = pd.DataFrame({'timestamp': [now], 'temperature': [new_temp], 'humidity': [new_hum]})
     
-    df = pd.DataFrame({
-        'timestamp': timestamps,
-        'temperature': temps,
-        'humidity': hums
-    })
+    # Append the row
+    df = pd.concat([df, new_row], ignore_index=True)
+    
+    # Prune exactly to limit so it doesn't leak memory (Sliding Window)
+    if len(df) > limit:
+        df = df.iloc[-limit:]
+        
+    st.session_state.mock_df = df
     return df
 
 # Fetch Data based on choice
 if data_source == "Live Database (Local)":
     df = load_db_data(records_limit)
 else:
-    df = generate_mock_data(records_limit, st.session_state.mock_seed)
+    df = update_mock_data(records_limit)
 
 # -----------------
 # Main UI Rendering
