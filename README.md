@@ -3,6 +3,33 @@
 
 聊天記錄請見[聊天記錄](./聊天記錄.md)
 
+# Demo
+## Live 模式
+> 在 Local 時透過 Wi-Fi 連接，讓板子將 DHT11 的資料送到後端。
+
+<details>
+<summary>點擊展開長截圖</summary>
+
+![Live Database Demo2](LiveDB_2.png)
+
+</details>
+
+![Live Database Demo1](LiveDB_1.png)
+
+
+## Random 模式
+> 隨機生成測試資料
+
+<details>
+<summary>點擊展開長截圖</summary>
+
+![Random Database Demo2](RandomDB_2.png)
+
+</details>
+
+![Random Database Demo1](RandomDB_1.png)
+
+
 # 硬體配置
 - ESP32 (ESP-WROOM-32)
 - DHT11
