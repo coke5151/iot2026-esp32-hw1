@@ -7,6 +7,11 @@
 
 聊天記錄請見[聊天記錄](./聊天記錄.md)
 
+# 組員
+- 4112064214 侯竣奇（我 | 組長）
+- 4112064201 鍾冠泓
+- 4112064206 龔裕棠
+
 # Demo
 
 🌍 **實機展示影片 (YouTube)**：[Watch Demo Video](https://youtu.be/hUg5mjioVz8?si=g2c-ctg7TzvIerPq)  
