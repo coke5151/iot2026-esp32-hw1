@@ -6,7 +6,6 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-from streamlit_autorefresh import st_autorefresh
 
 # -----------------
 # Page Settings
@@ -57,18 +56,16 @@ records_limit = st.sidebar.slider(
     "Number of Records to Display", min_value=10, max_value=500, value=100, step=10
 )
 
+refresh_interval_sec = st.sidebar.slider(
+    "Auto Refresh Interval (sec)", min_value=1, max_value=10, value=2, step=1
+)
+
 if data_source == "Live Database (Local)":
     if st.sidebar.button("🔄 Refresh Data"):
-        pass  # Button click automatically triggers a script rerun
-
-    # Automatically triggers a frontend rerun every 5000 milliseconds (5 seconds)
-    st_autorefresh(interval=5000, limit=None, key="live_data_updater")
+        st.rerun()  # Trigger immediate rerun for manual refresh
 else:
     if st.sidebar.button("🎲 Clear & Regenerate Mock Data"):
         st.session_state.mock_df = None  # Clears the rolling history
-
-    # Automatically triggers a frontend rerun every 1000 milliseconds (1 second)
-    st_autorefresh(interval=1000, limit=None, key="mock_data_updater")
 
 
 # -----------------
@@ -137,12 +134,6 @@ def update_mock_data(limit):
     return df
 
 
-# Fetch Data based on choice
-if data_source == "Live Database (Local)":
-    df = load_db_data(records_limit)
-else:
-    df = update_mock_data(records_limit)
-
 # -----------------
 # Main UI Rendering
 # -----------------
@@ -151,17 +142,27 @@ st.markdown(
     "Monitor your space precisely. **Use buttons on the left to manually refresh.**"
 )
 
-if df.empty:
+
+@st.fragment(run_every=f"{refresh_interval_sec}s")
+def render_dashboard_fragment():
+    # Fetch data inside fragment to avoid full-page reruns and reduce UI stutter.
     if data_source == "Live Database (Local)":
-        st.warning(
-            "⚠️ Live Database (Local) is unavailable or empty in this environment. \n⚠️ 公開展示或尚未佈建的環境無法連線到本機資料庫（或資料庫尚未建立），屬於預期行為。"
-        )
-        st.info(
-            "We could not read any sensor data from `backend/sensor_data.db`. If you are running the backend locally, ensure the ESP32 has started sending data. \n\n若在本機端執行，請確認 `backend/sensor_data.db` 已由後端建立並持續寫入；若僅為公開展示，請在左側切換回 **Random Mock Data (Demo)** 預覽儀表板功能。"
-        )
+        df = load_db_data(records_limit)
     else:
-        st.warning("⚠️ No data could be generated.")
-else:
+        df = update_mock_data(records_limit)
+
+    if df.empty:
+        if data_source == "Live Database (Local)":
+            st.warning(
+                "⚠️ Live Database (Local) is unavailable or empty in this environment. \n⚠️ 公開展示或尚未佈建的環境無法連線到本機資料庫（或資料庫尚未建立），屬於預期行為。"
+            )
+            st.info(
+                "We could not read any sensor data from `backend/sensor_data.db`. If you are running the backend locally, ensure the ESP32 has started sending data. \n\n若在本機端執行，請確認 `backend/sensor_data.db` 已由後端建立並持續寫入；若僅為公開展示，請在左側切換回 **Random Mock Data (Demo)** 預覽儀表板功能。"
+            )
+        else:
+            st.warning("⚠️ No data could be generated.")
+        return
+
     # -----------------
     # Top Metrics Board
     # -----------------
@@ -261,3 +262,6 @@ else:
 
     with st.expander("👀 View Raw Data Table"):
         st.dataframe(df.sort_values("timestamp", ascending=False))
+
+
+render_dashboard_fragment()
