@@ -13,11 +13,11 @@
 <details>
 <summary>點擊展開長截圖</summary>
 
-![Live Database Demo2](LiveDB_2.png)
+![Live Database Demo2](images/LiveDB_2.png)
 
 </details>
 
-![Live Database Demo1](LiveDB_1.png)
+![Live Database Demo1](images/LiveDB_1.png)
 
 
 ## Random 模式
@@ -26,11 +26,11 @@
 <details>
 <summary>點擊展開長截圖</summary>
 
-![Random Database Demo2](RandomDB_2.png)
+![Random Database Demo2](images/RandomDB_2.png)
 
 </details>
 
-![Random Database Demo1](RandomDB_1.png)
+![Random Database Demo1](images/RandomDB_1.png)
 
 
 # 硬體配置
