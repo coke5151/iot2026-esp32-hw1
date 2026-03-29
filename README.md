@@ -1,6 +1,7 @@
 # IOT2026 ESP32 HW1
 > 114-2 智慧物聯網 Arduino 系列課程 HW1
 
+🐙 **GitHub Repository**：[coke5151/iot2026-esp32-hw1](https://github.com/coke5151/iot2026-esp32-hw1)  
 🌍 **線上展示 (Public Demo)**：[https://iot2026-arduino-hw1-pytree.streamlit.app/](https://iot2026-arduino-hw1-pytree.streamlit.app/)  
 > *(本專案的 Streamlit 儀表板已成功免費部署於官方的 Streamlit Community Cloud 服務上)*
 
